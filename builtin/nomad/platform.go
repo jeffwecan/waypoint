@@ -90,6 +90,10 @@ func (p *Platform) Deploy(
 		p.config.ServicePort = 3000
 	}
 
+	if p.config.ServicePortLabel == "" {
+		p.config.ServicePortLabel = "waypoint"
+	}
+
 	// Determine if we have a job that we manage already
 	job, _, err := jobclient.Info(result.Name, &api.QueryOptions{})
 	if strings.Contains(err.Error(), "job not found") {
@@ -101,8 +105,27 @@ func (p *Platform) Deploy(
 				Mode: "host",
 				DynamicPorts: []api.Port{
 					{
-						Label: "waypoint",
+						Label: p.config.ServicePortLabel,
 						To:    int(p.config.ServicePort),
+					},
+				},
+			},
+		}
+		checkName := fmt.Sprintf("%s-service-port", src.App)
+		checkInterval, _ := time.ParseDuration("30s")
+		checkTimeout, _ := time.ParseDuration("30s")
+		tg.Services = []*api.Service{
+			{
+				Name:      src.App,
+				PortLabel: p.config.ServicePortLabel,
+				Tags:      p.config.ServiceTags,
+				Checks: []api.ServiceCheck{
+					{
+						Name:      checkName,
+						Type:      "tcp",
+						PortLabel: p.config.ServicePortLabel,
+						Interval:  checkInterval,
+						Timeout:   checkTimeout,
 					},
 				},
 			},
@@ -215,7 +238,10 @@ type Config struct {
 	// Defaults to port 3000.
 	// TODO Evaluate if this should remain as a default 3000, should be a required field,
 	// or default to another port.
-	ServicePort uint `hcl:"service_port,optional"`
+	ServicePort      uint   `hcl:"service_port,optional"`
+	ServicePortLabel string `hcl:"service_port_label,optional"`
+
+	ServiceTags []string `hcl:"service_tags,optional"`
 }
 
 func (p *Platform) Documentation() (*docs.Documentation, error) {
